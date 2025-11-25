@@ -1,0 +1,19 @@
+version: '3.8'
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  chat:
+    build: .
+    command: node server.js
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - PORT=3001
+    ports:
+      - "3001:3001"
+    depends_on:
+      - redis
+    volumes:
+      - ./:/app

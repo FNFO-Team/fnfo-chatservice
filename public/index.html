@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>FNFO Chat - Room test</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.socket.io/4.8.0/socket.io.min.js"></script>
+</head>
+<body>
+<div class="chat-container">
+    <h2>Chat Test</h2>
+    <div>
+      <label>Username: <input id="username" value="player1"></label>
+      <label>RoomId: <input id="roomId" value="room-1"></label>
+      <button id="connectBtn">Conectar</button>
+    </div>
+
+    <div id="chatUi" style="display:none;">
+      <div class="input-area">
+        <input id="msg" placeholder="Escribe un mensaje..." />
+        <button onclick="sendMsg()">Enviar</button>
+      </div>
+      <ul id="chat"></ul>
+    </div>
+</div>
+
+<script>
+  let socket;
+  const connectBtn = document.getElementById('connectBtn');
+  connectBtn.addEventListener('click', () => {
+    const username = document.getElementById('username').value || "anon";
+    const roomId = document.getElementById('roomId').value || "room-1";
+
+    socket = io({
+      auth: { username }
+    });
+
+    socket.on('connect_error', (err) => {
+      alert("Connect error: " + err.message);
+    });
+
+    socket.on('connect', () => {
+      document.getElementById('chatUi').style.display = 'block';
+      // join room
+      socket.emit('room:join', { roomId }, (resp) => {
+        if (resp.ok) {
+          const chat = document.getElementById('chat');
+          chat.innerHTML = '';
+          // load last messages
+          (resp.last || []).forEach(m => {
+            appendMsg(m);
+          });
+        } else {
+          alert("Join error: " + resp.msg);
+        }
+      });
+    });
+
+    socket.on('chat:message', (msg) => appendMsg(msg));
+    socket.on('system', (s) => {
+      const el = document.createElement('li');
+      el.innerHTML = `<em>${s.text}</em>`;
+      document.getElementById('chat').appendChild(el);
+    });
+  });
+
+  function appendMsg(msg) {
+    const li = document.createElement('li');
+    li.innerHTML = `<span class="user">${msg.from}</span>: <span>${msg.text}</span>`;
+    document.getElementById('chat').appendChild(li);
+    const chatBox = document.getElementById('chat');
+    chatBox.scrollTop = chatBox.scrollHeight;
+  }
+
+  function sendMsg() {
+    const text = document.getElementById('msg').value;
+    if (!text || !socket) return;
+    const roomId = document.getElementById('roomId').value;
+    socket.emit('chat:message', { roomId, text }, (ack) => {
+      if (!ack.ok) console.warn("msg failed", ack);
+    });
+    document.getElementById('msg').value = '';
+  }
+</script>
+</body>
+</html>
