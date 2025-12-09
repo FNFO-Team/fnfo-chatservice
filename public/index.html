@@ -2,85 +2,357 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>FNFO Chat - Room test</title>
-  <link rel="stylesheet" href="style.css">
+  <title>FNFO Chat - Room Test</title>
   <script src="https://cdn.socket.io/4.8.0/socket.io.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      margin: 0;
+      padding: 20px;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    h2 {
+      color: #ff00d4;
+      text-align: center;
+    }
+    .connect-form {
+      background: #16213e;
+      padding: 20px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+    }
+    .connect-form label {
+      display: block;
+      margin-bottom: 10px;
+    }
+    .connect-form input {
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 5px;
+      background: #600f49;
+      color: #fff;
+      margin-top: 5px;
+    }
+    .connect-form button {
+      width: 100%;
+      padding: 12px;
+      background: #ff00b7;
+      color: #000;
+      border: none;
+      border-radius: 5px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 15px;
+    }
+    .connect-form button:hover {
+      background: #e600db;
+    }
+    .chat-container {
+      display: none;
+      background: #16213e;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .chat-header {
+      background: #600f52;
+      padding: 15px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .chat-header h3 {
+      margin: 0;
+      color: #ff009d;
+    }
+    .chat-header .status {
+      font-size: 12px;
+      color: #4caf50;
+    }
+    .chat-messages {
+      height: 400px;
+      overflow-y: auto;
+      padding: 15px;
+    }
+    .message {
+      margin-bottom: 10px;
+      padding: 10px;
+      border-radius: 8px;
+      background: #600f51;
+    }
+    .message.system {
+      background: transparent;
+      color: #888;
+      font-style: italic;
+      text-align: center;
+      font-size: 12px;
+    }
+    .message .user {
+      color: #ff00d0;
+      font-weight: bold;
+    }
+    .message .time {
+      font-size: 10px;
+      color: #666;
+      margin-left: 10px;
+    }
+    .message .text {
+      margin-top: 5px;
+    }
+    .chat-input {
+      display: flex;
+      padding: 15px;
+      background: #0f3460;
+    }
+    .chat-input input {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 5px 0 0 5px;
+      background: #1a1a2e;
+      color: #fff;
+    }
+    .chat-input button {
+      padding: 12px 20px;
+      background: #ff00c3;
+      color: #000;
+      border: none;
+      border-radius: 0 5px 5px 0;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .typing-indicator {
+      padding: 5px 15px;
+      font-size: 12px;
+      color: #888;
+      font-style: italic;
+      height: 20px;
+    }
+    .disconnect-btn {
+      background: #e94560 !important;
+      color: #fff !important;
+      padding: 8px 15px;
+      border-radius: 5px;
+      cursor: pointer;
+      border: none;
+      font-size: 12px;
+    }
+  </style>
 </head>
 <body>
-<div class="chat-container">
-    <h2>Chat Test</h2>
-    <div>
-      <label>Username: <input id="username" value="player1"></label>
-      <label>RoomId: <input id="roomId" value="room-1"></label>
-      <button id="connectBtn">Conectar</button>
-    </div>
 
-    <div id="chatUi" style="display:none;">
-      <div class="input-area">
-        <input id="msg" placeholder="Escribe un mensaje..." />
-        <button onclick="sendMsg()">Enviar</button>
+<div class="container">
+  <h2>FNFO Chat Test</h2>
+
+  <!-- Connection Form -->
+  <div class="connect-form" id="connectForm">
+    <label>
+      User ID (Firebase UID):
+      <input type="text" id="oduserId" value="dev_player1" placeholder="Tu Firebase UID">
+    </label>
+    <label>
+      Username (Display Name):
+      <input type="text" id="username" value="Player1" placeholder="Tu nombre">
+    </label>
+    <label>
+      Room ID (del matchmaking):
+      <input type="text" id="roomId" value="room_822ad021" placeholder="ej: room_abc12345">
+    </label>
+    <button onclick="connect()">🔌 Conectar al Chat</button>
+  </div>
+
+  <!-- Chat UI -->
+  <div class="chat-container" id="chatContainer">
+    <div class="chat-header">
+      <h3>🎮 Sala: <span id="currentRoom">-</span></h3>
+      <div>
+        <span class="status" id="connectionStatus">● Conectado</span>
+        <button class="disconnect-btn" onclick="disconnect()">Salir</button>
       </div>
-      <ul id="chat"></ul>
     </div>
+    <div class="chat-messages" id="chatMessages"></div>
+    <div class="typing-indicator" id="typingIndicator"></div>
+    <div class="chat-input">
+      <input 
+        type="text" 
+        id="messageInput" 
+        placeholder="Escribe un mensaje..." 
+        onkeypress="handleKeyPress(event)"
+        oninput="handleTyping()"
+      >
+      <button onclick="sendMessage()">Enviar</button>
+    </div>
+  </div>
 </div>
 
 <script>
-  let socket;
-  const connectBtn = document.getElementById('connectBtn');
-  connectBtn.addEventListener('click', () => {
-    const username = document.getElementById('username').value || "anon";
-    const roomId = document.getElementById('roomId').value || "room-1";
+  let socket = null;
+  let currentRoomId = null;
+  let typingTimeout = null;
 
+  function connect() {
+    const oduserId = document.getElementById('oduserId').value.trim();
+    const username = document.getElementById('username').value.trim();
+    const roomId = document.getElementById('roomId').value.trim();
+
+    if (!oduserId || !username || !roomId) {
+      alert('Por favor completa todos los campos');
+      return;
+    }
+
+    // Conectar con autenticación de desarrollo
     socket = io({
-      auth: { username }
-    });
-
-    socket.on('connect_error', (err) => {
-      alert("Connect error: " + err.message);
+      auth: {
+        oduserId: oduserId,
+        username: username
+      }
     });
 
     socket.on('connect', () => {
-      document.getElementById('chatUi').style.display = 'block';
-      // join room
-      socket.emit('room:join', { roomId }, (resp) => {
-        if (resp.ok) {
-          const chat = document.getElementById('chat');
-          chat.innerHTML = '';
-          // load last messages
-          (resp.last || []).forEach(m => {
-            appendMsg(m);
-          });
+      console.log('Connected to chat server');
+      document.getElementById('connectionStatus').textContent = '● Conectado';
+      document.getElementById('connectionStatus').style.color = '#4caf50';
+
+      // Unirse a la sala
+      socket.emit('room:join', { roomId }, (response) => {
+        if (response.ok) {
+          currentRoomId = roomId;
+          document.getElementById('connectForm').style.display = 'none';
+          document.getElementById('chatContainer').style.display = 'block';
+          document.getElementById('currentRoom').textContent = roomId;
+
+          // Mostrar historial
+          clearMessages();
+          (response.last || []).forEach(msg => appendMessage(msg));
         } else {
-          alert("Join error: " + resp.msg);
+          alert('Error al unirse: ' + response.msg);
+          socket.disconnect();
         }
       });
     });
 
-    socket.on('chat:message', (msg) => appendMsg(msg));
-    socket.on('system', (s) => {
-      const el = document.createElement('li');
-      el.innerHTML = `<em>${s.text}</em>`;
-      document.getElementById('chat').appendChild(el);
+    socket.on('connect_error', (err) => {
+      alert('Error de conexión: ' + err.message);
+      document.getElementById('connectionStatus').textContent = '● Desconectado';
+      document.getElementById('connectionStatus').style.color = '#e94560';
     });
-  });
 
-  function appendMsg(msg) {
-    const li = document.createElement('li');
-    li.innerHTML = `<span class="user">${msg.from}</span>: <span>${msg.text}</span>`;
-    document.getElementById('chat').appendChild(li);
-    const chatBox = document.getElementById('chat');
-    chatBox.scrollTop = chatBox.scrollHeight;
+    socket.on('disconnect', () => {
+      document.getElementById('connectionStatus').textContent = '● Desconectado';
+      document.getElementById('connectionStatus').style.color = '#e94560';
+    });
+
+    // Recibir mensajes
+    socket.on('chat:message', (msg) => {
+      appendMessage(msg);
+    });
+
+    // Mensajes del sistema
+    socket.on('system', (data) => {
+      appendSystemMessage(data.text);
+    });
+
+    // Indicador de typing
+    socket.on('chat:typing', (data) => {
+      if (data.isTyping) {
+        document.getElementById('typingIndicator').textContent = `${data.username} está escribiendo...`;
+      } else {
+        document.getElementById('typingIndicator').textContent = '';
+      }
+    });
   }
 
-  function sendMsg() {
-    const text = document.getElementById('msg').value;
-    if (!text || !socket) return;
-    const roomId = document.getElementById('roomId').value;
-    socket.emit('chat:message', { roomId, text }, (ack) => {
-      if (!ack.ok) console.warn("msg failed", ack);
+  function disconnect() {
+    if (socket && currentRoomId) {
+      socket.emit('room:leave', { roomId: currentRoomId });
+      socket.disconnect();
+    }
+    
+    document.getElementById('connectForm').style.display = 'block';
+    document.getElementById('chatContainer').style.display = 'none';
+    currentRoomId = null;
+    socket = null;
+  }
+
+  function sendMessage() {
+    const input = document.getElementById('messageInput');
+    const text = input.value.trim();
+
+    if (!text || !socket || !currentRoomId) return;
+
+    socket.emit('chat:message', { roomId: currentRoomId, text }, (response) => {
+      if (!response.ok) {
+        console.error('Error sending message:', response.msg);
+      }
     });
-    document.getElementById('msg').value = '';
+
+    input.value = '';
+
+    // Notificar que dejó de escribir
+    socket.emit('chat:typing', { roomId: currentRoomId, isTyping: false });
+  }
+
+  function handleKeyPress(event) {
+    if (event.key === 'Enter') {
+      sendMessage();
+    }
+  }
+
+  function handleTyping() {
+    if (!socket || !currentRoomId) return;
+
+    socket.emit('chat:typing', { roomId: currentRoomId, isTyping: true });
+
+    // Reset timeout
+    clearTimeout(typingTimeout);
+    typingTimeout = setTimeout(() => {
+      socket.emit('chat:typing', { roomId: currentRoomId, isTyping: false });
+    }, 2000);
+  }
+
+  function appendMessage(msg) {
+    const container = document.getElementById('chatMessages');
+    const div = document.createElement('div');
+    div.className = 'message';
+
+    const time = new Date(msg.timestamp).toLocaleTimeString();
+
+    div.innerHTML = `
+      <span class="user">${escapeHtml(msg.from)}</span>
+      <span class="time">${time}</span>
+      <div class="text">${escapeHtml(msg.text)}</div>
+    `;
+
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  function appendSystemMessage(text) {
+    const container = document.getElementById('chatMessages');
+    const div = document.createElement('div');
+    div.className = 'message system';
+    div.textContent = text;
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  function clearMessages() {
+    document.getElementById('chatMessages').innerHTML = '';
+  }
+
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 </script>
+
 </body>
 </html>
